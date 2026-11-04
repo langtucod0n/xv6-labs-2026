@@ -124,7 +124,9 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-
+  p->interpose_mask = 0;
+  p->interpose_path[0] = '\0';
+  p->is_interposed = 0;
   // Allocate a trapframe page.
   if ((p->trapframe = (struct trapframe *)kalloc()) == 0) {
     freeproc(p);
@@ -167,6 +169,9 @@ freeproc(struct proc *p)
   p->chan = 0;
   p->killed = 0;
   p->xstate = 0;
+  p->interpose_mask = 0;
+  p->interpose_path[0] = '\0';
+  p->is_interposed = 0;
   p->state = UNUSED;
 }
 
@@ -266,6 +271,11 @@ kfork(void)
   if ((np = allocproc()) == 0) {
     return -1;
   }
+
+  // Copy interpose mask and allowed path from parent to child.
+  np->interpose_mask = p->interpose_mask;
+  safestrcpy(np->interpose_path, p->interpose_path, sizeof(np->interpose_path));
+  np->is_interposed = p->is_interposed;
 
   // Copy user memory from parent to child.
   if (uvmcopy(p->pagetable, np->pagetable, p->sz) < 0) {
