@@ -25,6 +25,8 @@
 #define BACKSPACE 0x100       // erase the last output character
 #define C(x)      ((x) - '@') // Control-x
 
+#define KEY_UP   0x80
+#define KEY_DOWN 0x81
 //
 // send one character to the uart, but don't use
 // interrupts or sleep(). safe to be called from
@@ -54,7 +56,7 @@ struct {
   uint w; // Write index
   uint e; // Edit index
 } cons;
-
+static int esc_state;
 //
 // user write() system calls to the console go here.
 // uses sleep() and UART interrupts.
@@ -147,7 +149,32 @@ void
 consoleintr(int c)
 {
   acquire(&cons.lock);
+  if (esc_state == 1) {
+    if (c == '[') {
+      esc_state = 2;
+      release(&cons.lock);
+      return;
+    }
+    esc_state = 0;
+  } else if (esc_state == 2) {
+    esc_state = 0;
 
+    if (c == 'A' || c == 'B') {
+      if (cons.e - cons.r < INPUT_BUF_SIZE) {
+        cons.buf[cons.e++ % INPUT_BUF_SIZE] = (c == 'A') ? KEY_UP : KEY_DOWN;
+        cons.w = cons.e;
+        wakeup(&cons.r);
+      }
+      release(&cons.lock);
+      return;
+    }
+  }
+
+  if (c == 27) {
+    esc_state = 1;
+    release(&cons.lock);
+    return;
+  }
   switch (c) {
   case C('P'): // Print process list.
     procdump();
@@ -164,6 +191,13 @@ consoleintr(int c)
     if (cons.e != cons.w) {
       cons.e--;
       consputc(BACKSPACE);
+    }
+    break;
+  case '\t':
+    if (cons.e - cons.r < INPUT_BUF_SIZE) {
+      cons.buf[cons.e++ % INPUT_BUF_SIZE] = c;
+      cons.w = cons.e;
+      wakeup(&cons.r);
     }
     break;
   default:
