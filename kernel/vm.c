@@ -148,10 +148,48 @@ walkaddr(pagetable_t pagetable, uint64 va)
 
 
 #if defined(LAB_PGTBL) || defined(SOL_MMAP) || defined(SOL_COW)
+static void
+vmprint_walk(pagetable_t pagetable, int level, uint64 base)
+{
+  for (int i = 0; i < 512; i++) {
+    pte_t pte = pagetable[i];
+
+    if ((pte & PTE_V) == 0) {
+      continue;
+    }
+
+    uint64 va = base | ((uint64)i << PXSHIFT(level));
+    uint64 pa = PTE2PA(pte);
+    int leaf = PTE_LEAF(pte) != 0;
+
+    for (int depth = 0; depth < 3 - level; depth++) {
+      printk(" ..");
+    }
+
+    printk("%p: pte %p pa %p %s%s%s%s",
+            (void*) va, (void*)pte, (void*)pa,
+            (pte & PTE_R) ? "R" : "",
+            (pte & PTE_W) ? "W" : "",
+            (pte & PTE_X) ? "X" : "",
+            (pte & PTE_U) ? "U" : "" 
+          );
+    
+    if (leaf && level == 1) {
+      printk(" superpage");
+    }
+    printk("\n");
+
+    if (!leaf && level > 0) {
+      vmprint_walk((pagetable_t)pa, level - 1, va);
+    }
+  }
+}
+
 void
 vmprint(pagetable_t pagetable)
 {
-  // your code here
+  printk("page table %p\n", (void*)pagetable);
+  vmprint_walk(pagetable, 2, 0);
 }
 #endif
 
