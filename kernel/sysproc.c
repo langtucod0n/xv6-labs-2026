@@ -107,10 +107,64 @@ sys_vmprint(void)
 #endif
 
 #ifdef LAB_PGTBL
-int
+uint64
 sys_pgaccess(void)
 {
-  // lab pgtbl: your code here.
+  enum {MAX_PAGES = 4096};
+
+  struct proc *p = myproc();
+  uint64 start, dst;
+  int npages;
+  unsigned char bitmap[MAX_PAGES / 8] = {0};
+
+  argaddr(0, &start);
+  argint(1, &npages);
+  argaddr(2, &dst);
+
+  if (npages <= 0 || npages > MAX_PAGES) {
+    return -1;
+  }
+
+  if (start >= MAXVA) {
+    return -1;
+  }
+
+  start = PGROUNDDOWN(start);
+
+  if ((uint64)npages > (MAXVA - start) / PGSIZE) {
+    return -1;
+  }
+
+  uint64 nbytes = (npages + 7) / 8;
+
+  if (dst >= p->sz || nbytes > p->sz - dst) {
+    return -1;
+  }
+
+  for (int i = 0; i < npages; i++) {
+    uint64 va = start + (uint64)i * PGSIZE;
+    pte_t *pte = walk(p->pagetable, va, 0);
+
+    if (pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0 || !PTE_LEAF(*pte)) {
+      return -1;
+    }
+
+    if (*pte & PTE_A) {
+      bitmap[i / 8] |= 1U << (i % 8);
+    }
+  }
+
+  if (copyout(p->pagetable, p->sz, dst, (char *)bitmap, nbytes) < 0) {
+    return -1;
+  }
+
+  for (int i = 0; i < npages; i++) {
+    uint64 va = start + (uint64)i * PGSIZE;
+    pte_t *pte = walk(p->pagetable, va, 0);
+    *pte &= ~PTE_A;
+  }
+
+  sfence_vma();
   return 0;
 }
 #endif
