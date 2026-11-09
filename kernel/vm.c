@@ -194,13 +194,78 @@ vmprint(pagetable_t pagetable)
 #endif
 
 
+// Return the address of the PTE in page table pagetable
+// that corresponds to virtual address va at target_level.
+// If alloc!=0, create any required page-table pages.
+// target_level = 1 for superpage (megapage), target_level = 0 for 4KB page.
+pte_t *
+kwalk(pagetable_t pagetable, uint64 va, int alloc, int target_level)
+{
+  if (va >= MAXVA)
+    panic("kwalk");
+
+  for (int level = 2; level > target_level; level--) {
+    pte_t *pte = &pagetable[PX(level, va)];
+    if (*pte & PTE_V) {
+      if (PTE_LEAF(*pte))
+        panic("kwalk: leaf encountered");
+      pagetable = (pagetable_t)PTE2PA(*pte);
+    } else {
+      if (!alloc || (pagetable = (pde_t *)kalloc()) == 0)
+        return 0;
+      memset(pagetable, 0, PGSIZE);
+      *pte = PA2PTE(pagetable) | PTE_V;
+    }
+  }
+  return &pagetable[PX(target_level, va)];
+}
+
+int
+kmappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
+{
+  uint64 a, last;
+  pte_t *pte;
+
+  if ((va % PGSIZE) != 0)
+    panic("kmappages: va not aligned");
+
+  if ((size % PGSIZE) != 0)
+    panic("kmappages: size not aligned");
+
+  if (size == 0)
+    panic("kmappages: size");
+
+  a = va;
+  last = va + size;
+  while (a < last) {
+    if ((a % SUPERPGSIZE) == 0 && (pa % SUPERPGSIZE) == 0 && (last - a) >= SUPERPGSIZE) {
+      if ((pte = kwalk(pagetable, a, 1, 1)) == 0)
+        return -1;
+      if (*pte & PTE_V)
+        panic("kmappages: remap superpage");
+      *pte = PA2PTE(pa) | perm | PTE_V;
+      a += SUPERPGSIZE;
+      pa += SUPERPGSIZE;
+    } else {
+      if ((pte = kwalk(pagetable, a, 1, 0)) == 0)
+        return -1;
+      if (*pte & PTE_V)
+        panic("kmappages: remap regular");
+      *pte = PA2PTE(pa) | perm | PTE_V;
+      a += PGSIZE;
+      pa += PGSIZE;
+    }
+  }
+  return 0;
+}
+
 // add a mapping to the kernel page table.
 // only used when booting.
 // does not flush TLB or enable paging.
 void
 kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
 {
-  if (mappages(kpgtbl, va, sz, pa, perm) != 0)
+  if (kmappages(kpgtbl, va, sz, pa, perm) != 0)
     panic("kvmmap");
 }
 

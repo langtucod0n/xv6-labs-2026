@@ -1,0 +1,6 @@
+1. Loi giai su dung bao nhieu PTE superpage?
+- Su dung 95 PTE superpage (32 PTE cho vung PLIC va 63 PTE cho vung RAM tu 0x80200000 den PHYSTOP 0x88000000).
+
+2. Nhung PTE superpage nay tiet kiem duoc bao nhieu trang o cap cuoi?
+- Tiet kiem duoc 95 trang bang trang o cap cuoi (L0 page-table pages), tuong duong 95 * 4096 = 389,120 bytes (khoang 380 KB).
+- Ly do: Moi superpage 2 MiB thay the cho 512 trang 4 KiB o cap cuoi. Thay vi phai cap phat mot trang bang trang cap 0 chua 512 muc PTE cap 0, superpage dat truc tiep leaf PTE o cap 1 (L1), loai bo hoan toan nhu cau cap phat trang bang trang cap 0 do. Do do, moi superpage tiet kiem chinh xac 1 trang bang trang cap cuoi.
