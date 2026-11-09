@@ -146,6 +146,11 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  p->alarm_interval = 0;
+  p->alarm_handler = 0;
+  p->alarm_ticks = 0;
+  p->in_alarm_handler = 0;
+
   return p;
 }
 
@@ -167,6 +172,10 @@ freeproc(struct proc *p)
   p->chan = 0;
   p->killed = 0;
   p->xstate = 0;
+  p->alarm_interval = 0;
+  p->alarm_handler = 0;
+  p->alarm_ticks = 0;
+  p->in_alarm_handler = 0;
   p->state = UNUSED;
 }
 
@@ -280,6 +289,12 @@ kfork(void)
 
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
+
+  // Do not inherit alarm state.
+  np->alarm_interval = 0;
+  np->alarm_handler = 0;
+  np->alarm_ticks = 0;
+  np->in_alarm_handler = 0;
 
   // increment reference counts on open file descriptors.
   for (i = 0; i < NOFILE; i++)
